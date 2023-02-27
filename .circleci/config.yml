@@ -43,7 +43,7 @@ jobs:
     working_directory: /mnt/ramdisk/
     docker:
       - image: mattermost/mattermost-build-webapp:20220802_node-16.10.0@sha256:3272aa759f10c2ef1719ed08cc82ddb07224bec5be86f09800c72f5e2a623c3d
-    resource_class: xlarge
+    resource_class: medium
     steps:
       - run: |
           git clone --depth=1 --no-single-branch https://github.com/mattermost/mattermost-webapp.git
@@ -150,7 +150,7 @@ jobs:
   check-mocks:
     docker:
       - image: cimg/go:1.18
-    resource_class: xlarge
+    resource_class: medium
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
@@ -206,7 +206,7 @@ jobs:
     docker:
       # Keep the version in sync with the command in Makefile
       - image: golangci/golangci-lint:v1.50.1
-    resource_class: xlarge
+    resource_class: small
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
@@ -220,7 +220,7 @@ jobs:
   check-mattermost-vet:
     docker:
       - image: mattermost/mattermost-build-server:20230118_golang-1.19.5
-    resource_class: xlarge
+    resource_class: small
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
@@ -262,7 +262,7 @@ jobs:
   build-mattermost-server:
     docker:
       - image: mattermost/mattermost-build-server:20230118_golang-1.19.5
-    resource_class: xlarge
+    resource_class: medium
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
