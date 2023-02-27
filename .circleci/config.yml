@@ -25,9 +25,6 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - go/load-cache
-      - go/mod-download
-      - go/save-cache
       - run: |
           cd ..
           git clone --depth=1 --no-single-branch https://github.com/mattermost/focalboard.git
@@ -35,6 +32,9 @@ jobs:
           git checkout $CIRCLE_BRANCH || git checkout <<parameters.target-branch>> || git checkout rolling-stable
           echo $(git rev-parse HEAD)
           cd ../mattermost-server
+      - go/mod-download
+      - go/save-cache
+      - run: |
           make setup-go-work
           cd ../focalboard
           EXCLUDE_ENTERPRISE=TRUE make templates-archive
@@ -108,13 +108,12 @@ jobs:
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
-          at: /mnt/ramdisk
+          at: /mnt/ramdisk/mattermost-server
       - go/load-cache
       - go/mod-download
       - go/save-cache
       - run:
           command: |
-            cd mattermost-server
             make app-layers
             if [[ -n $(git status --porcelain) ]]; then echo "Please update the app layers using make app-layers"; exit 1; fi
 
@@ -138,7 +137,7 @@ jobs:
     docker:
       - image: cimg/go:1.18
     resource_class: medium+
-    working_directory: /mnt/ramdisk
+    working_directory: /mnt/ramdisk/mattermost-server
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
@@ -147,14 +146,13 @@ jobs:
       - go/save-cache
       - run:
           command: |
-            cd mattermost-server
             make modules-tidy
             if [[ -n $(git status --porcelain) ]]; then echo "Please tidy up the Go modules using make modules-tidy"; git diff; exit 1; fi
   check-store-layers:
     docker:
       - image: cimg/go:1.18
     resource_class: medium
-    working_directory: /mnt/ramdisk
+    working_directory: /mnt/ramdisk/mattermost-server
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
@@ -163,14 +161,13 @@ jobs:
       - go/save-cache
       - run:
           command: |
-            cd mattermost-server
             make store-layers
             if [[ -n $(git status --porcelain) ]]; then echo "Please update the store layers using make store-layers"; exit 1; fi
   check-mocks:
     docker:
       - image: cimg/go:1.18
     resource_class: medium
-    working_directory: /mnt/ramdisk
+    working_directory: /mnt/ramdisk/mattermost-server
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
@@ -179,7 +176,6 @@ jobs:
       - go/save-cache
       - run:
           command: |
-            cd mattermost-server
             make mocks
             if [[ -n $(git status --porcelain) ]]; then echo "Please update the mocks using `make mocks`"; exit 1; fi
   check-email-templates:
