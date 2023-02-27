@@ -206,7 +206,7 @@ jobs:
     docker:
       # Keep the version in sync with the command in Makefile
       - image: golangci/golangci-lint:v1.50.1
-    resource_class: small
+    resource_class: medium
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
@@ -220,7 +220,7 @@ jobs:
   check-mattermost-vet:
     docker:
       - image: mattermost/mattermost-build-server:20230118_golang-1.19.5
-    resource_class: small
+    resource_class: medium
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
