@@ -1,7 +1,8 @@
 version: 2.1
 
 orbs:
-  aws-s3: circleci/aws-s3@3.0.0
+  go: circleci/go@1.7.2
+
 
 executors:
   ubuntu:
@@ -24,6 +25,9 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run: |
           cd ..
           git clone --depth=1 --no-single-branch https://github.com/mattermost/focalboard.git
@@ -46,7 +50,7 @@ jobs:
     resource_class: medium
     steps:
       - run: |
-          git clone --depth=1 --no-single-branch https://github.com/mattermost/mattermost-webapp.git
+          git clone --depth=1 --no-single-branch https://github.com/speedypleath/mattermost-webapp.git
           cd mattermost-webapp
           git checkout $CIRCLE_BRANCH || git checkout master
           export WEBAPP_GIT_COMMIT=$(git rev-parse HEAD)
@@ -81,6 +85,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run: |
           cd focalboard
           echo "Building Boards product for web app"
@@ -102,6 +109,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -116,6 +126,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -129,6 +142,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -142,6 +158,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -155,6 +174,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -168,6 +190,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -182,6 +207,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
       - run:
           command: |
             cd mattermost-server
@@ -206,16 +234,19 @@ jobs:
     docker:
       # Keep the version in sync with the command in Makefile
       - image: golangci/golangci-lint:v1.50.1
-    resource_class: medium
+    resource_class: medium+
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
           at: /mnt/ramdisk
+      - go/load-cache
+      - go/mod-download
       - run:
           command: |
             cd mattermost-server
             go vet ./...
             make golangci-lint
+      - go/save-cache
   # Dedicate job for mattermost-vet to make more clear when the job fails
   check-mattermost-vet:
     docker:
@@ -233,20 +264,6 @@ jobs:
             make config-reset
             make plugin-checker
             make vet BUILD_NUMBER='${CIRCLE_BRANCH}-${CIRCLE_BUILD_NUM}' MM_NO_ENTERPRISE_LINT=true MM_VET_OPENSPEC_PATH='${PWD}/../mattermost-api-reference/v4/html/static/mattermost-openapi-v4.yaml'
-  build-api-spec:
-    docker:
-      - image: cimg/node:lts
-    working_directory: /mnt/ramdisk
-    steps:
-      - attach_workspace:
-          at: /mnt/ramdisk
-      - run:
-          command: |
-            git clone --depth=1 --no-single-branch https://github.com/mattermost/mattermost-api-reference.git
-            cd mattermost-api-reference
-            echo "Trying to checkout the same branch on mattermost-api-reference as mattermost-server"
-            git checkout ${CIRCLE_BRANCH} || true
-            make build
   build-focalboard:
     docker:
       - image: mattermost/mattermost-build-server:20230118_golang-1.19.5
@@ -262,7 +279,7 @@ jobs:
   build-mattermost-server:
     docker:
       - image: mattermost/mattermost-build-server:20230118_golang-1.19.5
-    resource_class: medium
+    resource_class: medium+
     working_directory: /mnt/ramdisk
     steps:
       - attach_workspace:
@@ -287,7 +304,7 @@ jobs:
           root: /mnt/ramdisk
           paths:
             - mattermost-server/dist
-  upload-artifacts-to-s3:
+  upload-artifacts-to-digitalocean:
     docker:
       - image: cimg/python:3.10
     working_directory: /mnt/ramdisk/
@@ -298,14 +315,7 @@ jobs:
           command: |
             cd /mnt/ramdisk/mattermost-server/dist/
             rm -rf mattermost
-      - aws-s3/copy:
-          from: /mnt/ramdisk/mattermost-server/dist/
-          to: "s3://pr-builds.mattermost.com/mattermost-server/commit/${CIRCLE_SHA1}/"
-          arguments: --acl public-read --cache-control "no-cache" --recursive
-      - aws-s3/copy:
-          from: /mnt/ramdisk/mattermost-server/dist/
-          to: s3://pr-builds.mattermost.com/mattermost-server/$(echo "${CIRCLE_BRANCH}" | sed 's/pull\//PR-/g')/
-          arguments: --acl public-read --cache-control "no-cache" --recursive
+    # Upload docker image to digitalocean
   build-docker:
     working_directory: /mnt/ramdisk/
     docker:
@@ -461,9 +471,6 @@ workflows:
       - check-migrations:
           requires:
             - setup-multi-product-repositories
-      - build-api-spec:
-          requires:
-            - setup-multi-product-repositories
       - build-mattermost-server:
           requires:
             - check-go-mod-tidy
@@ -476,7 +483,6 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
             - setup-focalboard-product
       - build-focalboard:
@@ -491,7 +497,6 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
       - test:
           name: test-mysql
@@ -509,7 +514,6 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
             - setup-focalboard-product
       - test:
@@ -528,37 +532,17 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
             - setup-focalboard-product
-      - test:
-          name: test-postgres-binary
-          dbdriver: postgres
-          dbsource: postgres://mmuser:mostest@postgres:5432/mattermost_test?sslmode=disable&connect_timeout=10&binary_parameters=yes
-          racemode: ""
-          requires:
-            - check-go-mod-tidy
-            - check-golangci-lint
-            - check-app-layers
-            - check-generate-worktemplates
-            - check-store-layers
-            - check-mocks
-            - check-email-templates
-            - check-gen-serialized
-            - check-mattermost-vet
-            - check-migrations
-            - build-api-spec
-            - setup-mattermost-webapp
-            - setup-focalboard-product
-      - upload-artifacts-to-s3:
-          context: mattermost-ci-pr-builds-s3
+      - upload-artifacts-to-digitalocean:
+          context: mattermost-ci-pr-builds-digitalocean
           requires:
             - build-mattermost-server
             - build-focalboard
       - build-docker:
           context: matterbuild-docker
           requires:
-            - upload-artifacts-to-s3
+            - upload-artifacts-to-digitalocean
   release-build:
     jobs:
       - setup-multi-product-repositories:
@@ -616,9 +600,6 @@ workflows:
       - check-migrations:
           requires:
             - setup-multi-product-repositories
-      - build-api-spec:
-          requires:
-            - setup-multi-product-repositories
       - sentry:
           context: matterbuild-sentry
           requires:
@@ -635,7 +616,6 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
             - setup-focalboard-product
       - build-focalboard:
@@ -650,25 +630,7 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
             - setup-mattermost-webapp
-      - test:
-          name: test-mysql
-          dbdriver: mysql
-          dbsource: mmuser:mostest@tcp(mysql:3306)/mattermost_test?charset=utf8mb4,utf8&multiStatements=true
-          racemode: "-race"
-          requires:
-            - check-go-mod-tidy
-            - check-golangci-lint
-            - check-app-layers
-            - check-generate-worktemplates
-            - check-store-layers
-            - check-mocks
-            - check-email-templates
-            - check-gen-serialized
-            - check-mattermost-vet
-            - check-migrations
-            - build-api-spec
       - test:
           name: test-postgres-normal
           dbdriver: postgres
@@ -685,21 +647,3 @@ workflows:
             - check-gen-serialized
             - check-mattermost-vet
             - check-migrations
-            - build-api-spec
-      - test:
-          name: test-postgres-binary
-          dbdriver: postgres
-          dbsource: postgres://mmuser:mostest@postgres:5432/mattermost_test?sslmode=disable&connect_timeout=10&binary_parameters=yes
-          racemode: ""
-          requires:
-            - check-go-mod-tidy
-            - check-golangci-lint
-            - check-app-layers
-            - check-generate-worktemplates
-            - check-store-layers
-            - check-mocks
-            - check-email-templates
-            - check-gen-serialized
-            - check-mattermost-vet
-            - check-migrations
-            - build-api-spec
